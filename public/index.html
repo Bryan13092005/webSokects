@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mensajería en Tiempo Real</title>
+<style>
+body{font-family:Arial;margin:0;background:#f1f5f9}
+header{background:#0f172a;color:white;padding:20px}
+.contenedor{display:grid;grid-template-columns:360px 1fr;gap:20px;padding:20px}
+.panel{background:white;padding:18px;border-radius:12px;margin-bottom:20px}
+input,select,button{width:100%;padding:10px;margin:6px 0;box-sizing:border-box}
+button{background:#2563eb;color:white;border:0;border-radius:8px;cursor:pointer}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #cbd5e1;padding:8px;font-size:14px}
+th{background:#e2e8f0}
+#chat{height:520px;overflow-y:auto;background:white;border-radius:12px;padding:18px}
+.msg{padding:10px;margin-bottom:10px;border-radius:8px;background:#e0f2fe}
+.privado{background:#dcfce7;border-left:5px solid #16a34a}
+.sistema{background:#fef3c7;color:#92400e}
+small{color:#64748b}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Mensajería en Tiempo Real</h1>
+  <p>Registro, mensajes globales y mensajes privados</p>
+</header>
+
+<div class="contenedor">
+  <aside>
+    <section class="panel">
+      <h2>1. Registrar usuario</h2>
+      <input id="nombreInput" placeholder="Escribe tu nombre">
+      <button onclick="registrarUsuario()">Registrar</button>
+    </section>
+
+    <section class="panel">
+      <h2>2. Usuarios conectados</h2>
+      <p>Total: <span id="totalUsuarios">0</span></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>IP</th>
+            <th>ID</th>
+          </tr>
+        </thead>
+        <tbody id="tablaUsuarios"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>3. Mensaje privado</h2>
+      <select id="usuarioDestino">
+        <option value="">Selecciona usuario</option>
+      </select>
+      <input id="mensajePrivadoInput" placeholder="Mensaje privado">
+      <button onclick="enviarPrivado()">Enviar privado</button>
+    </section>
+  </aside>
+
+  <main>
+    <section class="panel">
+      <h2>4. Mensaje global</h2>
+      <input id="mensajeGlobalInput" placeholder="Mensaje para todos">
+      <button onclick="enviarGlobal()">Enviar global</button>
+    </section>
+
+    <section>
+      <h2>Chat</h2>
+      <div id="chat"></div>
+    </section>
+  </main>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    alert("¡Bienvenido al chat en tiempo real! Regístrate para empezar a enviar mensajes globales y privados.");
+const socket = io();
+
+const nombreInput = document.getElementById("nombreInput");
+const tablaUsuarios = document.getElementById("tablaUsuarios");
+const totalUsuarios = document.getElementById("totalUsuarios");
+const usuarioDestino = document.getElementById("usuarioDestino");
+const mensajeGlobalInput = document.getElementById("mensajeGlobalInput");
+const mensajePrivadoInput = document.getElementById("mensajePrivadoInput");
+const chat = document.getElementById("chat");
+
+function registrarUsuario(){
+  const nombre = nombreInput.value.trim();
+  if(!nombre){
+    alert("Escribe tu nombre");
+    return;
+  }
+  socket.emit("registrar", nombre);
+}
+
+function enviarGlobal(){
+    if(nombreInput.value.trim() === ""){
+    alert("Regístrate para enviar mensajes globales");
+    return;
+    }
+  const texto = mensajeGlobalInput.value.trim();
+  if(!texto){
+    alert("Escribe un mensaje global");
+    return;
+  }
+  socket.emit("mensaje-global", texto);
+  mensajeGlobalInput.value = "";
+}
+
+function enviarPrivado(){
+    if(nombreInput.value.trim() === ""){
+    alert("Regístrate para enviar mensajes privados");
+    return;
+    }
+  const destinoId = usuarioDestino.value;
+  const texto = mensajePrivadoInput.value.trim();
+
+  if(!destinoId){
+    alert("Selecciona un usuario destino");
+    return;
+  }
+
+  if(!texto){
+    alert("Escribe un mensaje privado");
+    return;
+  }
+
+  socket.emit("mensaje-privado-ip", { destinoId, texto });
+  mensajePrivadoInput.value = "";
+}
+
+function agregarMensaje(clase, contenido){
+  const div = document.createElement("div");
+  div.className = "msg " + clase;
+  div.innerHTML = contenido;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+socket.on("usuarios-conectados", (usuarios) => {
+  tablaUsuarios.innerHTML = "";
+  usuarioDestino.innerHTML = `<option value="">Selecciona usuario</option>`;
+  totalUsuarios.textContent = usuarios.length;
+
+  usuarios.forEach((u) => {
+    const fila = document.createElement("tr");
+    fila.innerHTML = `
+      <td>${u.nombre}</td>
+      <td>${u.ip}</td>
+      <td>${u.id.substring(0, 6)}...</td>
+    `;
+    tablaUsuarios.appendChild(fila);
+    if(u.id !== socket.id && u.nombre !== "Sin nombre"){
+      const option = document.createElement("option");
+      option.value = u.id;
+      option.textContent = `${u.nombre} - ${u.ip}`;
+      usuarioDestino.appendChild(option);
+    }
+  });
+});
+
+socket.on("mensaje-global", (data) => {
+  agregarMensaje("", `<strong>GLOBAL - ${data.de}</strong>
+    <small>${data.hora}</small><br>${data.texto}`);
+});
+
+socket.on("mensaje-privado", (data) => {
+  agregarMensaje("privado", `<strong>PRIVADO - ${data.de}</strong>
+    <small>${data.hora}</small><br>${data.texto}`);
+});
+
+socket.on("mensaje-sistema", (data) => {
+  agregarMensaje("sistema", `<strong>SISTEMA</strong>
+    <small>${data.hora}</small><br>${data.texto}`);
+});
+</script>
+</body>
+</html>
